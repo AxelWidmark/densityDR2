@@ -1,6 +1,6 @@
 # densityDR2
 
-This project contains code used to produce the results of "Measuring the local matter density using Gaia DR2" (Widmark, 2018, arXiv:XXXXXXXXX).
+This project contains code used to produce the results of "Measuring the local matter density using Gaia DR2" (Widmark, 2018, arXiv:1811.07911).
 
 This code is written in Python and uses the following packages:
 numpy, scipy, healpy, matplotlib, pandas

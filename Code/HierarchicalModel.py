@@ -8,7 +8,11 @@ import time
 
 
 class stellarsample():
-    def __init__(self,absGlims,rlims=[0.1,0.2],dust=False,toy=False,in_plane=False):
+    # inialize class, this specifies what sample of stars to load
+    # dust -- whether or not to include dust extinction corrections
+    # toy -- if true, loads the mock data samples
+    # in_plane -- if true, the velocity information of stars for which b<5 degrees is considered
+    def __init__(self,absGlims,rlims=[0.1,0.2],dust=True,toy=False,in_plane=False):
         self.in_plane = in_plane
         self.rlims = rlims
         self.k = 4.74057 # unit conversion
@@ -50,6 +54,7 @@ class stellarsample():
         print('Number of objects:  ',self.number_of_objects)
         print('RV fraction:  ',1.-np.sum(np.isnan(self.data_set[:,5]))/self.number_of_objects,'\n\n')
     
+    # multivariate gaussian
     def multivariate_normal(self,diff,cov):
         dim = len(diff)
         assert dim==np.shape(cov)[0] and dim==np.shape(cov)[1] and (dim,)==np.shape(diff)
@@ -57,6 +62,7 @@ class stellarsample():
         cov_det = np.linalg.det(cov)
         return math.exp(-1./2.*np.dot(np.dot(cov_inv,diff),diff))/math.sqrt((2.*pi)**dim*cov_det)
     
+    # this is the stellar count norm, see section 4.3 in the paper
     def stellar_count_norm_f(self,hyperparams):
         rho1,rho2,rho3,rho4,GzA,GzB,gz1,gz2,gz3,z0,vz0 = hyperparams
         res = 0.
@@ -65,6 +71,7 @@ class stellarsample():
             res += self.nuofz(z,hyperparams)*self.effectivearea[i]
         return res
     
+    # this creates an interpolated function of the gravitational potential as a function of height z
     def set_phiofz(self,hyperparams):
         rho1,rho2,rho3,rho4,GzA,GzB,gz1,gz2,gz3,z0,vz0 = hyperparams
         z_vec = np.linspace(0.,0.4,40001)
@@ -81,15 +88,19 @@ class stellarsample():
             phi_vec[i] = phi_vec[i-1]+1e-2*(force_vec[i]+force_vec[i-1])/2.
         self.phiofz = interp1d(z_vec,phi_vec)
 
+    # the stellar number density as a function gravitational potential, see Eq. 5 in the paper
     def nuofphi(self,phi,hyperparams):
         rho1,rho2,rho3,rho4,GzA,GzB,gz1,gz2,gz3,z0,vz0 = hyperparams
         return (1.-GzA-GzB)*np.exp(-phi/gz1**2.)+GzA*np.exp(-phi/gz2**2.)+GzB*np.exp(-phi/gz3**2.)
     
+    # the stellar number density as a function height z, see Eq. 5 in the paper
     def nuofz(self,z,hyperparams):
         phi = self.phiofz(abs(z))
         return self.nuofphi(phi,hyperparams)
     
-    
+    # the unnormalized log posterior, see Eq. 15 in the paper
+    # par_in_num -- specifies the number of steps by which the numerical integration over parallax is computed
+    # thinningfactor -- a thinning factor for the number of stars considered, to be used for a quicker estimate of the posterior density
     def lnposterior(self,hyperparams,par_int_num=20,thinningfactor=1):
         rho1,rho2,rho3,rho4,GzA,GzB,gz1,gz2,gz3,z0,vz0 = hyperparams
         self.set_phiofz(hyperparams)
@@ -110,6 +121,9 @@ class stellarsample():
             res -= np.log( stellar_count_norm )
         return res
     
+    # the unnormalized posterior of the ith stellar object, i.e. the integrand of Eq. 15 in the paper
+    # par_in_num -- specifies the number of steps by which the numerical integration over parallax is computed
+    # thinningfactor -- a thinning factor for the number of stars considered, to be used for a quicker estimate of the posterior density
     def obj_posterior(self,i,hyperparams,par_int_num):
         rho1,rho2,rho3,rho4,GzA,GzB,gz1,gz2,gz3,z0,vz0 = hyperparams
         l,b,par,mul,mub,vlos,sigma_mul,sigma_mub,sigma_par,mulmubcorr,mulparcorr,mubparcorr,sigma_vlos,Gmag = self.data_set[i]

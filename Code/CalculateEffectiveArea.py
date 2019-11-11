@@ -7,7 +7,7 @@ from scipy.interpolate import RectBivariateSpline as spline2d
 from scipy.integrate import quad
 pi=math.pi
 
-# WITH DUST
+# loads dust map
 red_ext = 3.1
 rlims = [0.1,0.2]
 absGlims = (3.0,3.7)
@@ -20,6 +20,7 @@ z = npzfile['z']
 BmV_matrix = npzfile['BmV_matrix']
 BmV_interp = RegularGridInterpolator((x,y,z), BmV_matrix, method='linear')
 
+# creates a function that gives the distribution of parallax uncertainties, in bins of apparent G-mag and Galactic latitude b
 Gmagvec = np.linspace(5.,15.,21)
 bvec = np.arcsin(np.linspace(-1.,1.,11))
 parerrpercentilesgrid = np.load('../Data/parerrpercentilesgrid.npy')
@@ -34,10 +35,10 @@ def get_parerrpercentiles(Gmag,b):
             b_k = k
     return parerrpercentilesgrid[Gmag_i][b_k]
 
+# interpolate the luminosity function as a function of absolute G-band magnitude, see section 2.4 and figure 2 in the paper
 npzfile = np.load('../Data/absG_histogram.npz')
 bin_means = npzfile['bin_means']
 histvals = npzfile['histvals']
-# PDF luminosity function in absG (not normalized)
 luminosityPDF = UnivariateSpline(bin_means,histvals,s=5e5)
 
 # completeness inferred from 2MASS xmatch, Gmag in 8--12
@@ -50,12 +51,16 @@ def completeness(l,b,Gmag):
     if Gmag>12. and Gmag<15.:
         return hp.pixelfunc.get_interp_val(map12to15,b+pi/2.,l,nest=True)
 
+# probability for a star to have observed parallax and observed absolute magnitude that are in accordance with the sample cuts (see section 3.1 in the paper)
+# parerrquantiles -- the star's distribution of parallax uncertaintes
+# Dlims -- distance limits for which the star will be included in the sample
 def selection_par(parreal,parerrquantiles,Dlims):
     due2par = 0.
     for parerr in parerrquantiles:
         due2par += (math.erf((1./Dlims[0]-parreal)/(math.sqrt(2.)*parerr))-math.erf((1./Dlims[1]-parreal)/(math.sqrt(2.)*parerr)))/2./len(parerrquantiles)
     return due2par
 
+# probability of selection (both completeness of Gaia and sample construction effects)
 def completeness_and_selection_par_Gmag(parreal,absG,l,b):
     xyzdir = np.array([math.cos(l)*math.cos(b), math.sin(l)*math.cos(b), math.sin(b)])
     magcorr = 5.*(np.log10(1e3/parreal)-1.)
@@ -89,6 +94,9 @@ def completeness_and_selection_par_Gmag(parreal,absG,l,b):
         else:
             return completeness(l,b,Gmag)*selection_par(parreal,get_parerrpercentiles(Gmag,b),Dlims)
 
+        
+# in this part, we generate stars and calculate their probability of selection,
+# this gives the effective area (see Eq. 34 in the paper) by Monte-Carlo integration
 print('start, 50,000,000 iterations')
 n_objects = 50000000
 # given parallax error of 1.5 mas, the error to the calculated absG at 200 pc distance is less than 0.6
